@@ -4,6 +4,7 @@ A C++11 thread serial dispatch queue implementation.
 
 ## Build
 The build process uses cmake.  Here are the steps:
+
 1. Check out the code.
 2. Create a build directory.
 3. Change directory to the build directory.
