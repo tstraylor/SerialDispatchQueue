@@ -23,90 +23,101 @@
 #include <exception>
 #include <stdexcept>
 #include <chrono>
+#include <string>
 
 #include "SerialDispatchQueue.h"
 
-using namespace std;
-
 SerialDispatchQueue::SerialDispatchQueue() :
-    m_stopped(false), m_taskThread(0)
-{
+        m_stopped(false), m_taskThread(nullptr) {
 }
 
-SerialDispatchQueue::~SerialDispatchQueue()
-{
+SerialDispatchQueue::~SerialDispatchQueue() {
     {
         std::unique_lock<std::mutex> guard(m_mutex);
         m_stopped = true;
     }
 
-    if(m_taskThread) {
-        m_cv.notify_all();
+    m_cv.notify_all();
+
+    // clear out the queue
+    std::queue<std::function<void(void)> > empty;
+    std::swap(m_taskQueue, empty);
+
+    if (m_taskThread != nullptr) {
         m_taskThread->join();
         delete m_taskThread;
-        m_taskThread = 0;
+        m_taskThread = nullptr;
     }
 }
 
-void SerialDispatchQueue::start() 
-{
-    // check to see if the queue is started already
-    if(m_taskThread)
+void SerialDispatchQueue::start() {
+
+    if (m_taskThread != nullptr)
         return;
 
-    m_taskThread = new std::thread( [this] { 
+    m_taskThread = new std::thread([this]() -> void {
 
-            for(;;) { 
-                
-                std::function<void(void)> task;
+        for (;;) {
 
-                {
-                    std::unique_lock<std::mutex> guard(m_mutex); 
-                    m_cv.wait(guard, [this] { 
-                            return this->m_stopped || !this->m_taskQueue.empty(); 
-                        }); 
+            std::function<void(void)> task;
 
-                    if(m_stopped)
-                        return;
+            {
+                std::unique_lock<std::mutex> guard(m_mutex);
+                m_cv.wait(guard, [this] {
+                    return this->m_stopped || !this->m_taskQueue.empty();
+                });
 
-                    task =  m_taskQueue.front();
-                    m_taskQueue.pop();
-                }
+                if (m_stopped)
+                    break;
 
+                task = m_taskQueue.front();
+                m_taskQueue.pop();
+            }
+
+            try {
                 // exceptions thrown by the tasks will cause
                 // the task thread to stop running.
                 task();
             }
+            catch (...) {
+                // we don't know why and probably don't care.
+            }
+        }
 
-            m_stopped = true;
-        });
+        m_stopped = true;
+    });
 
-    if(!m_taskThread) 
+    if (m_taskThread == nullptr) {
         throw std::runtime_error("Unable to create queue task thread");
+    }
 }
 
-void SerialDispatchQueue::stop() 
-{
+void SerialDispatchQueue::stop() {
     {
         std::unique_lock<std::mutex> guard(m_mutex);
         m_stopped = true;
     }
 
-    if(m_taskThread) {
-        m_cv.notify_all();
+    // let everyone know we are done
+    m_cv.notify_all();
+
+    // clear out the queue
+    std::queue<std::function<void(void)> > empty;
+    std::swap(m_taskQueue, empty);
+
+    if (m_taskThread != nullptr) {
         m_taskThread->join();
         delete m_taskThread;
-        m_taskThread = 0;
+        m_taskThread = nullptr;
     }
 }
 
-void SerialDispatchQueue::run(const std::function<void(void)> &task) 
-{
+void SerialDispatchQueue::run(const std::function<void(void)> &task) {
     {
         std::unique_lock<std::mutex> guard(m_mutex);
         // we don't want tasks queued while the queue is stopped
-        if(m_stopped)
-            return; 
+        if (m_stopped)
+            return;
 
         m_taskQueue.push(task);
     }

@@ -31,22 +31,25 @@
 
 class SerialDispatchQueue {
 
-    public:
+public:
 
-        SerialDispatchQueue();
-        ~SerialDispatchQueue();
+    SerialDispatchQueue();
 
-        void start();
-        void stop();
-        void run(const std::function<void(void)> &task);
+    ~SerialDispatchQueue();
 
-    private:
+    void start();
 
-        bool m_stopped;
-        std::mutex m_mutex;
-        std::condition_variable m_cv;
-        std::thread *m_taskThread;
-        std::queue<std::function<void(void)> > m_taskQueue;
+    void stop();
+
+    void run(const std::function<void(void)> &task);
+
+private:
+
+    bool m_stopped;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    std::thread *m_taskThread;
+    std::queue<std::function<void(void)> > m_taskQueue;
 };
 
 #endif // __SerialDispatchQueue_h__

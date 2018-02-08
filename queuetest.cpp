@@ -46,6 +46,7 @@ int main(int argc, char *argv[])
     for(int i = 0; i<10; ++i) {
         queue.run(std::bind(processData, std::ref(dataVector), i));
         queue.run(std::bind(sendMessage, "Message"));
+        queue.run([] () { cout << "lambda expression" << endl; });
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(20));
